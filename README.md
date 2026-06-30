@@ -60,6 +60,10 @@ python3 daily_trending.py
 | `TOP_N` | 推送条数 | `10` |
 | `SINCE` | 榜单周期 `daily`/`weekly`/`monthly` | `daily` |
 | `LANGUAGE` | 只看某语言（如 `python`），留空=全部 | 全部 |
+| `TRANSLATE` | 把英文简介翻成中文（`0` 关闭） | `1` |
+| `TARGET_LANG` | 翻译目标语言 | `zh-CN` |
+
+> 翻译走免密钥接口（Google 优先，失败回退 MyMemory，再失败保留英文原文）；已是中文的简介自动跳过。
 
 **改推送时间**：修改 `cron`，注意用 **UTC**。例如北京时间 08:00 = `0 0 * * *`，每周一 09:00 = `0 1 * * 1`。
 
