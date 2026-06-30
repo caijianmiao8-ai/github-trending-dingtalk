@@ -14,6 +14,8 @@ GitHub 每日热门项目 -> 钉钉推送
   TOP_N              推送条数，默认 10
   SINCE              榜单周期：daily / weekly / monthly，默认 daily
   LANGUAGE           只看某语言（如 python）；留空 = 全部语言
+  TRANSLATE          是否把英文简介翻成中文，默认 1（开启）；设 0 关闭
+  TARGET_LANG        翻译目标语言，默认 zh-CN
   DRY_RUN            设为 1/true 时只打印消息、不真正推送（本地调试用）
 """
 
@@ -47,6 +49,51 @@ def strip_tags(s):
     s = re.sub(r"<[^>]+>", " ", s)
     s = _html.unescape(s)
     return re.sub(r"\s+", " ", s).strip()
+
+# ---------- 翻译（英文简介 -> 中文，免密钥） ----------
+
+def _has_cjk(s):
+    return any("一" <= ch <= "鿿" for ch in s)
+
+
+def _google_translate(text, target):
+    url = (
+        "https://translate.googleapis.com/translate_a/single"
+        "?client=gtx&sl=auto&tl=" + urllib.parse.quote(target) + "&dt=t&q="
+        + urllib.parse.quote(text)
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    return "".join(seg[0] for seg in data[0] if seg and seg[0])
+
+
+def _mymemory_translate(text, target):
+    url = (
+        "https://api.mymemory.translated.net/get?langpair="
+        + urllib.parse.quote("en|" + target) + "&q=" + urllib.parse.quote(text)
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    out = data.get("responseData", {}).get("translatedText", "")
+    if out and "MYMEMORY WARNING" not in out.upper():
+        return out
+    return ""
+
+
+def translate(text, target="zh-CN"):
+    """英文简介翻译成中文；已是中文或为空则原样返回；接口全失败时回退英文原文。"""
+    if not text or _has_cjk(text):
+        return text
+    for fn in (_google_translate, _mymemory_translate):
+        try:
+            out = fn(text, target).strip()
+            if out:
+                return out
+        except Exception:
+            continue
+    return text
 
 # ---------- 抓取 & 解析 ----------
 
@@ -195,6 +242,12 @@ def main():
     repos = parse_trending(html)[:top_n]
     if not repos:
         sys.exit("ERROR: 没有解析到任何项目，GitHub Trending 页面结构可能已变化。")
+
+    # 把英文简介翻成中文（默认开启，可用 TRANSLATE=0 关闭）
+    if env("TRANSLATE", "1").lower() not in ("0", "false", "no"):
+        target = env("TARGET_LANG", "zh-CN") or "zh-CN"
+        for r in repos:
+            r["desc"] = translate(r["desc"], target)
 
     title, text = build_markdown(repos, source_url)
 
