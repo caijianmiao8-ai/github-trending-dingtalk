@@ -1,0 +1,36 @@
+name: GitHub Daily Trending → DingTalk
+
+on:
+  schedule:
+    # 01:00 UTC = 北京时间 09:00（GitHub Actions 定时任务用 UTC，且高峰期可能延迟几分钟到一小时）
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只预览不推送（true / false）"
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Push GitHub trending to DingTalk
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+          TOP_N: "10"
+          SINCE: "daily"
+          # LANGUAGE: ""            # 留空=全部语言；如只看 python 则填 python
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: python daily_trending.py
